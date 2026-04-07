@@ -1,0 +1,25 @@
+seed: 42
+device: "cuda"     # 没有GPU就改成 "cpu"
+
+scale: 4           # x2 或 x4（和老师给的 bicubic 一致的话用对应倍率）
+patch_size: 96
+batch_size: 8
+num_workers: 2
+
+train:
+  epochs: 40 
+  lr: 1e-5
+  loss: "l1"       # "l1" 或 "mse"
+  save_every: 1
+
+paths:
+  train_hr: "data/train/train_sharp"
+  train_lr: "data/train/train_sharp_bicubic"
+  val_hr: "data/val/val_sharp"
+  val_lr: "data/val/val_sharp_bicubic"
+
+  test_hr: "data/val/val_sharp"
+  test_lr: "data/val/val_sharp_bicubic"
+
+  ckpt_dir: "checkpoints"
+  out_dir: "outputs"
