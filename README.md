@@ -1,209 +1,244 @@
-art 1 Overview
+# CV Project README
 
-Part 1 focuses on single image super-resolution.
-The goal is to train a baseline model that reconstructs a high-resolution (HR) image from a low-resolution (LR) image.
+本仓库包含两个阶段的超分辨率实验：
 
-Main characteristics
-Paired LR-HR image training
-Baseline super-resolution pipeline
-PSNR-based evaluation
-Used as a reference baseline for comparison with Part 2
-Part 2 Overview
+- Part 1: 单帧图像超分（SRCNN）
+- Part 2: 视频超分（BasicVSR 风格简化版）
 
-Part 2 focuses on video super-resolution (VSR) using a BasicVSR-style framework.
+数据组织采用 REDS/DAVIS 风格目录，代码基于 PyTorch。
 
-Instead of processing a single image, Part 2 takes a sequence of frames as input and predicts a sequence of high-resolution frames.
+## 1. 项目结构
 
-Main characteristics
-Sequence-based LR-HR training
-Temporal modeling across neighboring frames
-Bidirectional propagation
-Reconstruction of HR video frames
-Evaluation with PSNR on frame sequences
-Important note
+```text
+CV/
+  requirements.txt
+  data/
+    train/
+      train_sharp/
+      train_sharp_bicubic/
+    val/
+      val_sharp/
+      val_sharp_bicubic/
+  part1/
+    config.yaml
+    main.py
+    src/
+  part2/
+    config.yaml
+    main.py
+    src/
+```
 
-The current implementation in part2 is a trainable BasicVSR-style scaffold / simplified implementation, not a full official reproduction with pretrained weights.
+## 2. 环境安装
 
-Environment
+建议使用 Python 3.9+。
 
-It is recommended to use Python 3.10 and a virtual environment.
-
-Create virtual environment
-python3 -m venv .venv
-source .venv/bin/activate
-Install dependencies
+```bash
 pip install -r requirements.txt
+```
 
-If requirements.txt is incomplete, install at least:
+`requirements.txt` 当前包含：
 
-pip install torch torchvision pyyaml numpy pillow tqdm
-Dataset Organization
-Part 1
+- torch
+- torchvision
+- pyyaml
+- pillow
+- tqdm
 
-Part 1 uses paired LR-HR images.
+## 3. 数据准备
 
-Example:
+请确保 LR/HR 帧文件名一一对应。
 
-data/
-├── train/
-│   ├── train_sharp/
-│   └── train_sharp_bicubic/
-└── val/
-    ├── val_sharp/
-    └── val_sharp_bicubic/
-Part 2
+### 3.1 Part 1 数据格式
 
-Part 2 expects video frames grouped by sequence/video folder.
+`part1/src/dataset.py` 会自动在 `lr_root` 后拼接 `X{scale}`，例如 `scale=4` 时：
 
-Example:
+- HR: `data/train/train_sharp/000/00000000.png`
+- LR: `data/train/train_sharp_bicubic/X4/000/00000000.png`
 
-data/
-├── train/
-│   ├── train_sharp/
-│   │   ├── video_001/
-│   │   │   ├── 00000000.png
-│   │   │   ├── 00000001.png
-│   │   │   └── ...
-│   │   └── video_002/
-│   │
-│   └── train_sharp_bicubic/
-│       └── X4/
-│           ├── video_001/
-│           │   ├── 00000000.png
-│           │   ├── 00000001.png
-│           │   └── ...
-│           └── video_002/
-│
-└── val/
-    ├── val_sharp/
-    └── val_sharp_bicubic/
-        └── X4/
-Notes
-LR and HR folders must have matching video folder names
-Frame names inside each video folder must align one-to-one
-For scale: 4, LR data is usually read from the X4/ subfolder
-Running Part 1
+因此 `part1/config.yaml` 中的 `train_lr / val_lr / test_lr` 应指向 `.../train_sharp_bicubic` 这一级，不要手动写到 `X4`。
 
-Move into the part1 directory:
+### 3.2 Part 2 数据格式
 
+`part2/src/dataset.py` 不会自动拼接 `X{scale}`，所以配置里应直接给到 `.../X4`：
+
+- `train_lr: /.../train_sharp_bicubic/X4`
+- `val_lr: /.../val_sharp_bicubic/X4`
+- `test_lr: /.../val_sharp_bicubic/X4`
+
+目录示例：
+
+```text
+data/train/train_sharp_bicubic/X4/000/00000000.png
+data/train/train_sharp/000/00000000.png
+```
+
+## 4. Part 1: SRCNN 单帧超分
+
+入口：`part1/main.py`
+
+支持模式：
+
+- `train`: 训练 SRCNN
+- `test`: 在测试集评估并保存可视化
+- `infer`: 对单张图做推理
+- `temporal`: 时域 baseline（邻域帧加权 + 可选锐化）
+
+### 4.1 训练
+
+```bash
 cd part1
+python main.py --mode train --cfg config.yaml
+```
 
-Train:
+输出：
 
-python3 main.py --mode train --cfg config.yaml
+- checkpoint: `part1/checkpoints/srcnn_x{scale}_epoch{n}.pth`
+- 日志目录: `part1/outputs/logs`
 
-Test:
+### 4.2 测试
 
-python3 main.py --mode test --cfg config.yaml
-Running Part 2
+```bash
+cd part1
+python main.py --mode test --cfg config.yaml --ckpt checkpoints/srcnn_x4_epoch20.pth
+```
 
-Move into the part2 directory:
+如不传 `--ckpt`，会自动尝试使用 `checkpoints` 中按文件名排序后的最后一个 `.pth`。
 
+测试输出：
+
+- 控制台打印 Bicubic 与 SRCNN 的平均 PSNR
+- 可视化图像保存到 `part1/outputs/vis`
+
+### 4.3 单图推理
+
+```bash
+cd part1
+python main.py --mode infer --cfg config.yaml \
+  --ckpt checkpoints/srcnn_x4_epoch20.pth \
+  --input /path/to/image.png \
+  --output outputs/infer_sr.png
+```
+
+未指定 `--output` 时，默认保存到 `paths.out_dir`。
+
+### 4.4 时域 baseline（temporal）
+
+```bash
+cd part1
+python main.py --mode temporal --cfg config.yaml
+```
+
+逻辑：读取邻域 LR 帧 -> 双三次上采样 -> 加权融合 -> 可选 UnsharpMask。
+
+相关参数在 `part1/config.yaml` 的 `temporal` 段：
+
+- `lr_root`
+- `out_dir`
+- `radius`
+- `weights`
+- `apply_unsharp`
+
+## 5. Part 2: 视频超分（BasicVSRTiny）
+
+入口：`part2/main.py`
+
+支持模式：
+
+- `train`
+- `test`
+
+模型位置：`part2/src/models/basicvsr.py`
+
+当前实现是可训练的 BasicVSR 风格简化版，包含双向传播与上采样重建；`spynet.py` 里是零光流占位模块（`SpyNetStub`）。
+
+### 5.1 训练
+
+```bash
 cd part2
+python main.py --mode train --cfg config.yaml
+```
 
-Train:
+输出：
 
-python3 main.py --mode train --cfg config.yaml
+- 最新权重：`part2/checkpoints/latest.pth`
+- 最优权重：`part2/checkpoints/best.pth`
 
-Test:
+### 5.2 测试
 
-python3 main.py --mode test --cfg config.yaml
-Part 2 Configuration
+```bash
+cd part2
+python main.py --mode test --cfg config.yaml
+```
 
-Example fields in part2/config.yaml:
+测试阶段会读取 `test.checkpoint`（默认 `checkpoints/best.pth`），并将结果按视频文件夹保存到 `paths.output_dir`。
 
-seed: 42
-device: "cuda"
-num_workers: 2
+示例输出结构：
 
-scale: 4
-patch_size: 64
-seq_len: 3
-interval: 1
+```text
+part2/outputs/
+  000/
+    00000000.png
+    00000001.png
+```
 
-train:
-  batch_size: 2
-  epochs: 5
-  lr: 0.0001
+## 6. 配置说明与注意事项
 
-model:
-  mid_channels: 64
-  num_blocks: 10
+### 6.1 Part 1
 
-paths:
-  train_hr: "/path/to/train_hr"
-  train_lr: "/path/to/train_lr"
-  val_hr: "/path/to/val_hr"
-  val_lr: "/path/to/val_lr"
-  test_hr: "/path/to/test_hr"
-  test_lr: "/path/to/test_lr"
-  ckpt_dir: "checkpoints"
-  output_dir: "outputs"
-Important note
+- `scale`: 上采样倍率（当前代码支持 x2/x4 数据组织）
+- `patch_size`: 训练裁剪 HR patch 尺寸
+- `train.loss`: `l1` 或 `mse`
+- `paths.*`: 训练/验证/测试数据路径与输出路径
 
-For Part 2, model parameters should be defined under:
+### 6.2 Part 2
 
-model:
-  mid_channels: ...
-  num_blocks: ...
+当前 `part2/src/train.py` 实际读取的关键字段：
 
-This ensures training and testing use the same architecture.
+- `train.batch_size`
+- `train.epochs`
+- `train.lr`
+- `train.weight_decay`（可选）
+- `train.log_interval`（可选，默认 10）
+- `train.val_interval`（可选，默认 1）
+- `seq_len`
+- `scale`
+- `paths.train_lr / train_hr / val_lr / val_hr / ckpt_dir`
+- `model.mid_channels / model.num_blocks`
 
-Outputs
-Part 1
-Trained checkpoints in part1/checkpoints/
-Restored SR results in part1/outputs/
-Part 2
-Trained checkpoints in part2/checkpoints/
-Restored SR frame sequences in part2/outputs/
-Evaluation
+注意：
 
-This project mainly uses:
+- `part2/config.yaml` 里的 `patch_size`、`train.val_every`、`dataset.*` 等字段当前训练脚本并未使用。
+- 如需随机裁剪，请在配置中增加 `crop_size`，因为训练代码读取的是 `cfg.get('crop_size')`。
 
-PSNR for reconstruction quality
-Sequence-level PSNR for Part 2
+## 7. 常见问题
 
-For Part 2, qualitative visual inspection is also important because temporal consistency and edge reconstruction matter in video super-resolution.
+1. 报错 `No LR/HR pairs found`（Part 1）
 
-Current Limitations
-Part 1
-Baseline-focused
-Limited perceptual enhancement
-Part 2
-Simplified BasicVSR-style implementation
-Not a full official BasicVSR / BasicVSR++ reproduction
-No full pretrained SpyNet integration yet
-Training is memory-intensive on GPUs with limited VRAM
-Practical Notes
-Video SR is significantly slower than image SR
-Small batch size is normal for Part 2 due to GPU memory limits
-If CUDA runs out of memory, reduce:
-batch_size
-seq_len
-patch_size
-mid_channels
-num_blocks
+请检查：
 
-Recommended smaller configuration for limited VRAM:
+- `paths.train_lr` 是否指向 `.../train_sharp_bicubic`（不是 `.../X4`）
+- `scale` 与实际 LR 子目录是否一致（如 `X4`）
+- LR/HR 帧文件名是否完全对应
 
-patch_size: 64
-seq_len: 3
+2. 报错 `Frame mismatch in video ...`（Part 2）
 
-train:
-  batch_size: 1
+说明某个视频文件夹里 LR 与 HR 帧名不一致，需要对齐命名和数量。
 
-model:
-  mid_channels: 32
-  num_blocks: 5
-Future Improvements
+3. GPU 不可用
 
-Possible future extensions include:
+把配置中的 `device` 从 `cuda` 改为 `cpu`。
 
-Full optical-flow-based alignment
-Stronger BasicVSR reproduction
-BasicVSR++ style propagation
-Perceptual loss and GAN-based enhancement
-Better temporal consistency evaluation
-Author
+## 8. 快速命令清单
 
-Course project by FC.
+```bash
+# Part 1 train/test
+cd part1
+python main.py --mode train --cfg config.yaml
+python main.py --mode test --cfg config.yaml --ckpt checkpoints/srcnn_x4_epoch20.pth
+
+# Part 2 train/test
+cd ../part2
+python main.py --mode train --cfg config.yaml
+python main.py --mode test --cfg config.yaml
+```
