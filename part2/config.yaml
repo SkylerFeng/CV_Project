@@ -1,0 +1,47 @@
+seed: 42
+device: "cuda"
+num_workers: 2
+
+scale: 4
+patch_size: 64
+seq_len: 3
+interval: 1
+
+train:
+  batch_size: 2
+  epochs: 5
+  lr: 1e-4
+  loss: "l1"
+  save_every: 1
+  val_every: 1
+
+paths:
+  train_hr: "/home/fc/Coding/CV/data/train/train_sharp"
+  train_lr: "/home/fc/Coding/CV/data/train/train_sharp_bicubic/X4"
+  val_hr: "/home/fc/Coding/CV/data/val/val_sharp"
+  val_lr: "/home/fc/Coding/CV/data/val/val_sharp_bicubic/X4"
+  test_hr: "/home/fc/Coding/CV/data/val/val_sharp"
+  test_lr: "/home/fc/Coding/CV/data/val/val_sharp_bicubic/X4"
+  ckpt_dir: "checkpoints"
+  output_dir: "outputs"
+
+test:
+  checkpoint: "checkpoints/best.pth"
+  save_images: true
+
+model:
+  name: "basicvsr"
+  mid_channels: 64
+  num_blocks: 10
+  use_pretrained_spynet: false
+  spynet_path: ""
+
+dataset:
+  mode: "sequence"
+  random_crop: true
+  augment: true
+  repeat: 1
+
+output:
+  save_val_images: false
+  save_test_images: true

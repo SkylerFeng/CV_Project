@@ -1,0 +1,48 @@
+seed: 42
+device: "cuda"     # 没有GPU就改成 "cpu"
+
+scale: 4           # x2 或 x4（和老师给的 bicubic 一致的话用对应倍率）
+patch_size: 96
+batch_size: 8
+num_workers: 2
+
+train:
+  epochs: 40 
+  lr: 1e-5
+  loss: "l1"       # "l1" 或 "mse"
+  save_every: 1
+
+paths:
+  train_hr: "/home/fc/Coding/CV/data/train/train_sharp"
+  train_lr: "/home/fc/Coding/CV/data/train/train_sharp_bicubic"
+  val_hr: "/home/fc/Coding/CV/data/val/val_sharp"
+  val_lr: "/home/fc/Coding/CV/data/val/val_sharp_bicubic"
+
+  test_hr: "/home/fc/Coding/CV/data/val/val_sharp"
+  test_lr: "/home/fc/Coding/CV/data/val/val_sharp_bicubic"
+
+  ckpt_dir: "checkpoints"
+  out_dir: "outputs"
+
+temporal:
+  # 这里填你的 LR 根目录（注意：不要自己手动写 X4，代码里会自动拼接）
+  # 例如 /home/fc/Coding/CV/data/val/val_sharp_bicubic
+  lr_root: /home/fc/Coding/CV/data/val/val_sharp_bicubic
+
+  # 输出目录
+  out_dir: outputs/vis/temporal_baseline
+
+  # 用几帧邻域
+  # radius=1 表示 [t-1, t, t+1]
+  radius: 1
+
+  # 如果不写，就会默认 [0.25, 0.5, 0.25]
+  weights: [0.25, 0.5, 0.25]
+
+  # 是否启用锐化
+  apply_unsharp: true
+
+  # PIL UnsharpMask 参数
+  unsharp_radius: 1.0
+  unsharp_percent: 120
+  unsharp_threshold: 3
