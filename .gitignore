@@ -21,8 +21,8 @@ __pycache__/
 *.pt
 *.ckpt
 
-!part2/checkpoints/
-!part2/checkpoints/**
+!part2_1/checkpoints/
+!part2_1/checkpoints/**
 !part2_2/models/
 !part2_2/models/**
 
