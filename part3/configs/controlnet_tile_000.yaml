@@ -1,0 +1,27 @@
+paths:
+  # Recommended input: BasicVSR++ SR frames. If you only have comparison images,
+  # first run run_hybrid_fusion.py once and use its extracted basic frames, or
+  # point this script at a folder of plain SR images.
+  input_dir: /home/fc/Coding/CV/part3/results/hybrid_000/basic_frames
+  output_dir: /home/fc/Coding/CV/part3/results/controlnet_tile_000
+
+model:
+  base_model: runwayml/stable-diffusion-v1-5
+  controlnet_model: lllyasviel/control_v11f1e_sd15_tile
+  torch_dtype: float16
+  device: cuda
+
+generation:
+  prompt: high quality video frame, natural texture, realistic detail, sharp but faithful
+  negative_prompt: distorted structure, changed object, text artifacts, oversharpening, flicker, low quality
+  num_inference_steps: 12
+  guidance_scale: 5.0
+  controlnet_conditioning_scale: 0.75
+  strength: 0.22
+  seed: 42
+  max_frames: 100
+
+  # Low-memory setting for 8GB GPUs. The generated frame is resized back to the
+  # original size before saving, and hybrid fusion still runs at original size.
+  max_side: 768
+  multiple_of: 8

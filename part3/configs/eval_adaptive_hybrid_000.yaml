@@ -1,0 +1,19 @@
+paths:
+  gt_dir: /home/fc/Coding/CV/data/val/val_sharp/000
+  output_dir: /home/fc/Coding/CV/part3/results/metrics_adaptive_hybrid_000
+
+methods:
+  BasicVSR++:
+    dir: /home/fc/Coding/CV/part3/results/adaptive_hybrid_000/basic_frames
+    suffix: ""
+
+  Real-ESRGAN:
+    dir: /home/fc/Coding/CV/part3/results/adaptive_hybrid_000/generative_frames
+    suffix: ""
+
+  Adaptive-Hybrid:
+    dir: /home/fc/Coding/CV/part3/results/adaptive_hybrid_000/frames
+    suffix: ""
+
+metrics:
+  crop_border: 0

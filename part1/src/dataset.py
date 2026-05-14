@@ -15,7 +15,15 @@ class PairSRDataset(Dataset):
       input  = bicubic-upsampled LR
       target = HR
     """
-    def __init__(self, lr_root: str, hr_root: str, patch_size: int = 96, scale: int = 4, is_train: bool = True):
+    def __init__(
+        self,
+        lr_root: str,
+        hr_root: str,
+        patch_size: int = 96,
+        scale: int = 4,
+        is_train: bool = True,
+        video_names=None,
+    ):
         self.lr_root = os.path.join(lr_root, f"X{scale}")
         self.hr_root = hr_root
         self.patch_size = int(patch_size)
@@ -24,6 +32,9 @@ class PairSRDataset(Dataset):
 
         self.pairs = []
         video_folders = sorted(os.listdir(self.hr_root))
+        if video_names:
+            wanted = {str(name) for name in video_names}
+            video_folders = [video for video in video_folders if video in wanted]
 
         for video in video_folders:
             hr_video_dir = os.path.join(self.hr_root, video)
@@ -52,6 +63,8 @@ class PairSRDataset(Dataset):
                 f"lr_root={self.lr_root}"
             )
 
+        if video_names:
+            print(f"[PairSRDataset] Selected videos: {', '.join(video_names)}")
         print(f"[PairSRDataset] Loaded {len(self.pairs)} pairs from {self.hr_root}")
 
     def __len__(self):

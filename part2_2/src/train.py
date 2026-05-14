@@ -15,7 +15,7 @@ sys.path.insert(0, str(CURRENT_DIR))
 
 from dataset import PairedImageDataset
 from model import build_realesrgan_x4plus_generator, load_generator_checkpoint
-from losses import build_pixel_loss
+from losses import build_sr_loss
 
 
 def set_seed(seed: int = 42):
@@ -115,6 +115,10 @@ def main():
     weight_decay = float(train_cfg.get("weight_decay", 0.0))
     loss_type = str(train_cfg.get("loss_type", "l1"))
     loss_weight = float(train_cfg.get("loss_weight", 1.0))
+    perceptual_weight = float(train_cfg.get("perceptual_weight", 0.0))
+    edge_weight = float(train_cfg.get("edge_weight", 0.0))
+    laplacian_weight = float(train_cfg.get("laplacian_weight", 0.0))
+    color_weight = float(train_cfg.get("color_weight", 0.0))
 
     save_freq = int(train_cfg.get("save_freq", 1))
     val_freq = int(train_cfg.get("val_freq", 1))
@@ -122,6 +126,7 @@ def main():
     seed = int(train_cfg.get("seed", 42))
 
     resume_path = str(resume_cfg.get("path", "")).strip()
+    resume_optimizer = bool(resume_cfg.get("optimizer", True))
 
     set_seed(seed)
 
@@ -151,7 +156,11 @@ def main():
     print(f"Batch size  : {batch_size}")
     print(f"Epochs      : {epochs}")
     print(f"LR          : {lr}")
-    print(f"Loss        : {loss_type}")
+    print(
+        f"Loss        : {loss_type}*{loss_weight} + "
+        f"perceptual*{perceptual_weight} + edge*{edge_weight} + "
+        f"laplacian*{laplacian_weight} + color*{color_weight}"
+    )
     print("=" * 60)
 
     train_set = PairedImageDataset(
@@ -216,14 +225,16 @@ def main():
         global_step = 0
         best_val_loss = float("inf")
 
-    criterion = build_pixel_loss(loss_type, loss_weight)
+    criterion = build_sr_loss(train_cfg).to(device)
     optimizer = Adam(model.parameters(), lr=lr, weight_decay=weight_decay, betas=(0.9, 0.99))
 
-    if resume_path:
+    if resume_path and resume_optimizer:
         ckpt = torch.load(resume_path, map_location="cpu")
         if "optimizer" in ckpt:
             optimizer.load_state_dict(ckpt["optimizer"])
             print("[INFO] Optimizer state resumed.")
+    elif resume_path:
+        print("[INFO] Optimizer state is not resumed.")
 
     log_path = os.path.join(save_dir, "train_log.txt")
 

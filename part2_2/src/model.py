@@ -127,6 +127,54 @@ class RRDBNet(nn.Module):
         return out
 
 
+class SRVGGNetCompact(nn.Module):
+    """
+    Compact VGG-style Real-ESRGAN generator used by official v3 models:
+    - realesr-animevideov3: num_conv=16, upscale=4
+    - realesr-general-x4v3: num_conv=32, upscale=4
+    """
+
+    def __init__(
+        self,
+        num_in_ch: int = 3,
+        num_out_ch: int = 3,
+        num_feat: int = 64,
+        num_conv: int = 16,
+        upscale: int = 4,
+        act_type: str = "prelu",
+    ):
+        super().__init__()
+        self.upscale = upscale
+        self.body = nn.ModuleList()
+        self.body.append(nn.Conv2d(num_in_ch, num_feat, 3, 1, 1))
+        self.body.append(self._make_activation(act_type, num_feat))
+
+        for _ in range(num_conv):
+            self.body.append(nn.Conv2d(num_feat, num_feat, 3, 1, 1))
+            self.body.append(self._make_activation(act_type, num_feat))
+
+        self.body.append(nn.Conv2d(num_feat, num_out_ch * upscale * upscale, 3, 1, 1))
+        self.upsampler = nn.PixelShuffle(upscale)
+
+    @staticmethod
+    def _make_activation(act_type: str, num_feat: int):
+        if act_type == "relu":
+            return nn.ReLU(inplace=True)
+        if act_type == "prelu":
+            return nn.PReLU(num_parameters=num_feat)
+        if act_type == "leakyrelu":
+            return nn.LeakyReLU(negative_slope=0.1, inplace=True)
+        raise ValueError(f"Unsupported activation: {act_type}")
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        out = x
+        for layer in self.body:
+            out = layer(out)
+        out = self.upsampler(out)
+        base = F.interpolate(x, scale_factor=self.upscale, mode="nearest")
+        return out + base
+
+
 def build_realesrgan_x4plus_generator() -> RRDBNet:
     """
     Build generator matching RealESRGAN_x4plus.
@@ -139,6 +187,65 @@ def build_realesrgan_x4plus_generator() -> RRDBNet:
         num_grow_ch=32,
         scale=4,
     )
+
+
+def build_realesrgan_x2plus_generator() -> RRDBNet:
+    return RRDBNet(
+        num_in_ch=3,
+        num_out_ch=3,
+        num_feat=64,
+        num_block=23,
+        num_grow_ch=32,
+        scale=2,
+    )
+
+
+def build_realesrgan_x4plus_anime_6b_generator() -> RRDBNet:
+    return RRDBNet(
+        num_in_ch=3,
+        num_out_ch=3,
+        num_feat=64,
+        num_block=6,
+        num_grow_ch=32,
+        scale=4,
+    )
+
+
+def build_realesr_animevideov3_generator() -> SRVGGNetCompact:
+    return SRVGGNetCompact(
+        num_in_ch=3,
+        num_out_ch=3,
+        num_feat=64,
+        num_conv=16,
+        upscale=4,
+        act_type="prelu",
+    )
+
+
+def build_realesr_general_x4v3_generator() -> SRVGGNetCompact:
+    return SRVGGNetCompact(
+        num_in_ch=3,
+        num_out_ch=3,
+        num_feat=64,
+        num_conv=32,
+        upscale=4,
+        act_type="prelu",
+    )
+
+
+def build_generator_by_name(model_name: str):
+    model_name = model_name.split(".pth")[0]
+    if model_name in ["RealESRGAN_x4plus", "RealESRNet_x4plus"]:
+        return build_realesrgan_x4plus_generator(), 4
+    if model_name == "RealESRGAN_x2plus":
+        return build_realesrgan_x2plus_generator(), 2
+    if model_name == "RealESRGAN_x4plus_anime_6B":
+        return build_realesrgan_x4plus_anime_6b_generator(), 4
+    if model_name == "realesr-animevideov3":
+        return build_realesr_animevideov3_generator(), 4
+    if model_name == "realesr-general-x4v3":
+        return build_realesr_general_x4v3_generator(), 4
+    raise ValueError(f"Unsupported Real-ESRGAN model_name: {model_name}")
 
 
 def load_generator_checkpoint(

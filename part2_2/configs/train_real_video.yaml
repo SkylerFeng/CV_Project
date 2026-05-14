@@ -1,0 +1,40 @@
+paths:
+  train_lr: /home/fc/Coding/CV/data/train/train_sharp_bicubic/X4
+  train_hr: /home/fc/Coding/CV/data/train/train_sharp
+
+  val_lr: /home/fc/Coding/CV/data/val/val_sharp_bicubic/X4
+  val_hr: /home/fc/Coding/CV/data/val/val_sharp
+
+  pretrain: /home/fc/Coding/CV/part2_2/models/RealESRGAN_x4plus.pth
+  save_dir: /home/fc/Coding/CV/part2_2/experiments/realesrgan_x4plus_real_video_loss
+
+train:
+  scale: 4
+  patch_size: 64
+  batch_size: 4
+  num_workers: 4
+
+  # Real-video finetuning should be conservative: keep fidelity and color
+  # stable, add only mild high-frequency/perceptual pressure.
+  epochs: 8
+  lr: 2e-5
+  weight_decay: 0.0
+
+  loss_type: charbonnier
+  loss_weight: 1.0
+  perceptual_weight: 0.003
+  edge_weight: 0.03
+  laplacian_weight: 0.02
+  color_weight: 0.03
+
+  save_freq: 1
+  val_freq: 1
+
+  device: cuda
+  seed: 42
+
+resume:
+  # Start from the current L1 finetuned checkpoint, but reset optimizer because
+  # the objective changes.
+  path: /home/fc/Coding/CV/part2_2/experiments/realesrgan_x4plus_l1_finetune/checkpoints/net_g_best.pth
+  optimizer: false

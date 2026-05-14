@@ -1,6 +1,7 @@
 .venv/
 venv/
 mmagic_env/
+part3_env/
 
 data/
 outputs/
@@ -12,6 +13,7 @@ experiments/
 part2_1/results/
 part2_2/results/
 part2_2/experiments/
+part3/results/
 
 __pycache__/
 *.pyc

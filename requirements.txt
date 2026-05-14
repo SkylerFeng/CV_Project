@@ -3,3 +3,4 @@ torchvision
 pyyaml
 pillow
 tqdm
+pytorch-msssim

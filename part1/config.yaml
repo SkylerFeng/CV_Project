@@ -24,6 +24,15 @@ paths:
   ckpt_dir: "checkpoints"
   out_dir: "outputs"
 
+test_video:
+  enabled: true
+  # Keep this small for quick runs. Metrics follow test_videos below.
+  max_sequences: 1
+  fps: 30
+
+# Empty list means the full validation set. Use ["000"] or ["000", "001"] for selected videos.
+test_videos: ["000"]
+
 temporal:
   # 这里填你的 LR 根目录（注意：不要自己手动写 X4，代码里会自动拼接）
   # 例如 /home/fc/Coding/CV/data/val/val_sharp_bicubic

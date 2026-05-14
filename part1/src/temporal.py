@@ -2,6 +2,7 @@ import os
 from PIL import Image, ImageFilter
 
 from .utils import ensure_dir
+from .video_utils import images_to_video, list_image_files
 
 
 IMG_EXTS = (".png", ".jpg", ".jpeg", ".bmp", ".webp")
@@ -91,6 +92,7 @@ def run_temporal_baseline(cfg: dict):
 
     lr_root = tcfg["lr_root"]
     out_root = tcfg["out_dir"]
+    video_root = tcfg.get("video_dir", os.path.join(out_root, "videos"))
 
     radius = int(tcfg.get("radius", 1))
     weights = tcfg.get("weights", None)
@@ -115,6 +117,7 @@ def run_temporal_baseline(cfg: dict):
         raise ValueError(f"Temporal LR root not found: {lr_root}")
 
     ensure_dir(out_root)
+    ensure_dir(video_root)
 
     video_folders = sorted([
         d for d in os.listdir(lr_root)
@@ -170,5 +173,8 @@ def run_temporal_baseline(cfg: dict):
             fused.save(out_path)
 
         print(f"[TemporalBaseline] Saved to: {video_out_dir}")
+        video_path = os.path.join(video_root, f"{video}.mp4")
+        images_to_video(list_image_files(video_out_dir), video_path)
+        print(f"[TemporalBaseline] Saved video to: {video_path}")
 
     print("[TemporalBaseline] Done.")

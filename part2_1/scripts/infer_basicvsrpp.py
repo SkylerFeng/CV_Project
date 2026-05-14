@@ -186,11 +186,11 @@ def main():
     device = "cuda" if torch.cuda.is_available() else "cpu"
 
     # ====== 改这里 ======
-    lr_folder = "/home/fc/Coding/CV/data/val/val_sharp_bicubic/X4/000"
-    hr_folder = "/home/fc/Coding/CV/data/val/val_sharp/000"
-    out_folder = "/home/fc/Coding/CV/part2_1/results/basicvsrpp_compare_000"
+    lr_folder = "/home/fc/Coding/CV/data/custom/my_video_lr"
+    hr_folder = "/home/fc/Coding/CV/custom/my_video_lr"
+    out_folder = "/home/fc/Coding/CV/part2_1/results/custom/my_video"
     ckpt_path = "/home/fc/Coding/CV/part2_1/mmagic/work_dirs/basicvsr-pp_c64n7_fc_finetune/basicvsr-pp_c64n7_fc_finetune/best_PSNR_iter_20000.pth"
-    max_frames = 100
+    max_frames = 1000
     fps = 30
     cpu_cache_length = 30
     # ===================

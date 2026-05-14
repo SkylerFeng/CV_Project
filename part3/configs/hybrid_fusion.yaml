@@ -1,0 +1,32 @@
+paths:
+  # Existing BasicVSR++ comparison frames. Each frame is bicubic | BasicVSR++ | HR.
+  basic_dir: /home/fc/Coding/CV/part2_1/results/basicvsrpp_compare_000/images
+  basic_panel_index: 1
+  basic_panel_count: 3
+
+  # ControlNet-Tile diffusion output used as the generative detail branch.
+  generative_dir: /home/fc/Coding/CV/part3/results/controlnet_tile_000
+  generative_suffix: ""
+
+  output_dir: /home/fc/Coding/CV/part3/results/hybrid_000
+
+fusion:
+  # Larger value protects strong edges/structure by trusting BasicVSR++ more.
+  edge_protect_strength: 1.15
+
+  # Larger value lets the generative branch contribute more in textured regions.
+  texture_gain: 1.25
+
+  # Global amount of generative detail. Keep conservative to reduce hallucination.
+  max_alpha: 0.55
+  min_alpha: 0.00
+
+  # Smooth the mask to avoid patchy seams.
+  mask_blur_radius: 5.0
+
+  # Reduce diffusion/generative use where the BasicVSR++ video changes sharply.
+  temporal_protect_strength: 0.50
+
+  save_grids: true
+  export_video: true
+  fps: 30

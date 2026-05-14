@@ -12,7 +12,9 @@ import torchvision.transforms.functional as TF
 CURRENT_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(CURRENT_DIR))
 
-from model import build_realesrgan_x4plus_generator, load_generator_checkpoint
+from model import build_generator_by_name, build_realesrgan_x4plus_generator, load_generator_checkpoint
+from tiler import RealESRGANTiler
+from video_utils import images_to_video, list_image_files
 
 
 IMG_EXTS = {".png", ".jpg", ".jpeg", ".bmp", ".webp", ".tif", ".tiff"}
@@ -36,6 +38,32 @@ def list_images_recursive(root: str) -> List[str]:
 
 def ensure_dir(path: str):
     os.makedirs(path, exist_ok=True)
+
+
+def create_videos_from_output(output_root: str, fps: int = 30):
+    video_root = os.path.join(output_root, "videos")
+    ensure_dir(video_root)
+
+    made_any = False
+    for folder, _, _ in os.walk(output_root):
+        if os.path.abspath(folder) == os.path.abspath(video_root):
+            continue
+        image_paths = list_image_files(folder)
+        if not image_paths:
+            continue
+
+        rel_dir = os.path.relpath(folder, output_root)
+        if rel_dir == ".":
+            video_name = "output"
+        else:
+            video_name = rel_dir.replace(os.sep, "_")
+        video_path = os.path.join(video_root, f"{video_name}.mp4")
+        images_to_video(image_paths, video_path, fps=fps)
+        print(f"[VIDEO] {folder} -> {video_path}")
+        made_any = True
+
+    if not made_any:
+        print("[VIDEO] No image sequence found for video export.")
 
 
 def load_image(path: str) -> torch.Tensor:
@@ -78,12 +106,30 @@ def load_model_for_inference(ckpt_path: str, device: torch.device):
     return model.eval(), used_key
 
 
+def load_named_model_for_inference(model_name: str, ckpt_path: str, device: torch.device):
+    model, scale = build_generator_by_name(model_name)
+    used_key, load_msg = load_generator_checkpoint(
+        model=model,
+        ckpt_path=ckpt_path,
+        map_location="cpu",
+        strict=True,
+    )
+    print(f"[INFO] Loaded {model_name} checkpoint with key: {used_key}")
+    print(load_msg)
+    return model.eval(), scale, used_key
+
+
 @torch.no_grad()
 def infer_one(model, img_tensor: torch.Tensor, device: torch.device) -> torch.Tensor:
     img_tensor = img_tensor.to(device)
     pred = model(img_tensor)
     pred = pred.clamp(0.0, 1.0)
     return pred
+
+
+@torch.no_grad()
+def infer_one_tiled(tiler: RealESRGANTiler, img_tensor: torch.Tensor) -> torch.Tensor:
+    return tiler.enhance_tensor(img_tensor)
 
 
 def build_output_path(input_path: str, input_root: str, output_root: str, suffix: str) -> str:
@@ -132,6 +178,37 @@ def main():
         default="cuda",
         help="cuda or cpu",
     )
+    parser.add_argument(
+        "--model-name",
+        type=str,
+        default="RealESRGAN_x4plus",
+        help=(
+            "Model architecture name: RealESRGAN_x4plus | RealESRNet_x4plus | "
+            "RealESRGAN_x2plus | RealESRGAN_x4plus_anime_6B | "
+            "realesr-animevideov3 | realesr-general-x4v3"
+        ),
+    )
+    parser.add_argument(
+        "--tile",
+        type=int,
+        default=0,
+        help="Tile size for low-memory inference. Use 128/256 for large images.",
+    )
+    parser.add_argument("--tile-pad", type=int, default=10)
+    parser.add_argument("--pre-pad", type=int, default=0)
+    parser.add_argument("--fp32", action="store_true", help="Disable half precision.")
+    parser.add_argument(
+        "--outscale",
+        type=float,
+        default=None,
+        help="Optional final resize scale. Defaults to model native scale.",
+    )
+    parser.add_argument(
+        "--fps",
+        type=int,
+        default=30,
+        help="FPS for exported mp4 videos",
+    )
     args = parser.parse_args()
 
     if not os.path.exists(args.input):
@@ -147,7 +224,16 @@ def main():
 
     ensure_dir(args.output)
 
-    model, used_key = load_model_for_inference(args.ckpt, device)
+    model, native_scale, used_key = load_named_model_for_inference(args.model_name, args.ckpt, device)
+    tiler = RealESRGANTiler(
+        model=model,
+        scale=native_scale,
+        device=device,
+        tile=args.tile,
+        tile_pad=args.tile_pad,
+        pre_pad=args.pre_pad,
+        half=(device.type == "cuda" and not args.fp32),
+    )
 
     image_paths = list_images_recursive(args.input)
     if len(image_paths) == 0:
@@ -159,14 +245,26 @@ def main():
     print(f"Input   : {args.input}")
     print(f"Output  : {args.output}")
     print(f"Ckpt    : {args.ckpt}")
+    print(f"Model   : {args.model_name}")
     print(f"Device  : {device}")
     print(f"Images  : {len(image_paths)}")
     print(f"Load key: {used_key}")
+    print(f"Tile    : {args.tile}")
     print("=" * 60)
 
     for i, img_path in enumerate(image_paths, 1):
         img_tensor = load_image(img_path)
-        pred = infer_one(model, img_tensor, device)
+        pred = infer_one_tiled(tiler, img_tensor)
+        if args.outscale is not None and float(args.outscale) != float(native_scale):
+            _, _, in_h, in_w = img_tensor.shape
+            out_h = int(round(in_h * float(args.outscale)))
+            out_w = int(round(in_w * float(args.outscale)))
+            pred = torch.nn.functional.interpolate(
+                pred,
+                size=(out_h, out_w),
+                mode="bicubic",
+                align_corners=False,
+            ).clamp(0, 1)
 
         save_path = build_output_path(
             input_path=img_path,
@@ -178,6 +276,8 @@ def main():
 
         print(f"[{i}/{len(image_paths)}] {img_path} -> {save_path}")
 
+    print("=" * 60)
+    create_videos_from_output(args.output, fps=args.fps)
     print("=" * 60)
     print("Inference finished.")
     print("=" * 60)
