@@ -68,7 +68,6 @@ data/
     wild_02.mp4
     wild_03.mp4
     wild_04.mp4
-    wild_05.mp4
   REDS-sample/                 # optional no-reference set
   vimeo-RL/                    # optional no-reference set
 ```
