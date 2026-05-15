@@ -7,7 +7,7 @@ from pathlib import Path
 
 import yaml
 import torch
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, Subset
 from torch.optim import Adam
 
 CURRENT_DIR = Path(__file__).resolve().parent
@@ -43,6 +43,28 @@ def calculate_psnr_torch(pred: torch.Tensor, target: torch.Tensor, eps: float = 
     if mse < eps:
         return float("inf")
     return 10.0 * math.log10(1.0 / mse)
+
+
+def maybe_subset(dataset, max_samples: int, name: str):
+    if max_samples <= 0 or max_samples >= len(dataset):
+        return dataset
+    print(f"[INFO] Using {max_samples}/{len(dataset)} samples for {name}.")
+    return Subset(dataset, list(range(max_samples)))
+
+
+def clone_trainable_params(model: torch.nn.Module):
+    return [p.detach().clone() for p in model.parameters() if p.requires_grad]
+
+
+def initial_weight_regularization(model: torch.nn.Module, initial_params, weight: float) -> torch.Tensor:
+    if weight <= 0 or not initial_params:
+        return next(model.parameters()).new_tensor(0.0)
+    reg = next(model.parameters()).new_tensor(0.0)
+    count = 0
+    for param, initial in zip((p for p in model.parameters() if p.requires_grad), initial_params):
+        reg = reg + torch.mean((param - initial) ** 2)
+        count += 1
+    return float(weight) * reg / max(count, 1)
 
 
 def save_checkpoint(save_path: str, model: torch.nn.Module, optimizer: torch.optim.Optimizer,
@@ -87,7 +109,7 @@ def main():
     parser.add_argument(
         "--config",
         type=str,
-        default="configs/train.yaml",
+        default="part2_2/configs/train_conservative.yaml",
         help="Path to config yaml",
     )
     args = parser.parse_args()
@@ -119,6 +141,12 @@ def main():
     edge_weight = float(train_cfg.get("edge_weight", 0.0))
     laplacian_weight = float(train_cfg.get("laplacian_weight", 0.0))
     color_weight = float(train_cfg.get("color_weight", 0.0))
+    init_weight_reg = float(train_cfg.get("init_weight_reg", 0.0))
+    max_train_samples = int(train_cfg.get("max_train_samples", 0))
+    max_val_samples = int(train_cfg.get("max_val_samples", 0))
+    amp = bool(train_cfg.get("amp", False))
+    grad_clip = float(train_cfg.get("grad_clip", 0.0))
+    log_interval = int(train_cfg.get("log_interval", 10))
 
     save_freq = int(train_cfg.get("save_freq", 1))
     val_freq = int(train_cfg.get("val_freq", 1))
@@ -159,8 +187,12 @@ def main():
     print(
         f"Loss        : {loss_type}*{loss_weight} + "
         f"perceptual*{perceptual_weight} + edge*{edge_weight} + "
-        f"laplacian*{laplacian_weight} + color*{color_weight}"
+        f"laplacian*{laplacian_weight} + color*{color_weight} + "
+        f"init_reg*{init_weight_reg}"
     )
+    print(f"AMP         : {amp}")
+    print(f"Grad clip   : {grad_clip}")
+    print(f"Log interval: {log_interval}")
     print("=" * 60)
 
     train_set = PairedImageDataset(
@@ -181,6 +213,8 @@ def main():
         use_hflip=False,
         use_rot=False,
     )
+    train_set = maybe_subset(train_set, max_train_samples, "train")
+    val_set = maybe_subset(val_set, max_val_samples, "val")
 
     train_loader = DataLoader(
         train_set,
@@ -227,6 +261,8 @@ def main():
 
     criterion = build_sr_loss(train_cfg).to(device)
     optimizer = Adam(model.parameters(), lr=lr, weight_decay=weight_decay, betas=(0.9, 0.99))
+    initial_params = clone_trainable_params(model) if init_weight_reg > 0 else []
+    scaler = torch.cuda.amp.GradScaler(enabled=(amp and device.type == "cuda"))
 
     if resume_path and resume_optimizer:
         ckpt = torch.load(resume_path, map_location="cpu")
@@ -237,6 +273,12 @@ def main():
         print("[INFO] Optimizer state is not resumed.")
 
     log_path = os.path.join(save_dir, "train_log.txt")
+    progress_log_path = os.path.join(save_dir, "progress_log.txt")
+
+    def write_progress(message: str):
+        print(message, flush=True)
+        with open(progress_log_path, "a", encoding="utf-8") as f:
+            f.write(message + "\n")
 
     for epoch in range(start_epoch, epochs + 1):
         model.train()
@@ -248,21 +290,36 @@ def main():
             lq = batch["lq"].to(device, non_blocking=True)
             gt = batch["gt"].to(device, non_blocking=True)
 
-            pred = model(lq)
-            loss = criterion(pred, gt)
+            with torch.cuda.amp.autocast(enabled=(amp and device.type == "cuda")):
+                pred = model(lq)
+                loss = criterion(pred, gt)
+                if init_weight_reg > 0:
+                    loss = loss + initial_weight_regularization(model, initial_params, init_weight_reg)
 
             optimizer.zero_grad()
-            loss.backward()
-            optimizer.step()
+            scaler.scale(loss).backward()
+            if grad_clip > 0:
+                scaler.unscale_(optimizer)
+                torch.nn.utils.clip_grad_norm_(model.parameters(), grad_clip)
+            scaler.step(optimizer)
+            scaler.update()
 
             epoch_loss += loss.item()
             global_step += 1
 
-            if batch_idx % 50 == 0 or batch_idx == 1:
-                print(
+            if batch_idx % max(log_interval, 1) == 0 or batch_idx == 1:
+                elapsed = time.time() - epoch_start
+                batches_done = batch_idx
+                batches_left = max(len(train_loader) - batch_idx, 0)
+                sec_per_batch = elapsed / max(batches_done, 1)
+                eta = batches_left * sec_per_batch
+                write_progress(
                     f"[Epoch {epoch}/{epochs}] "
                     f"[Batch {batch_idx}/{len(train_loader)}] "
-                    f"loss={loss.item():.6f}"
+                    f"step={global_step} "
+                    f"loss={loss.item():.6f} "
+                    f"elapsed={elapsed / 60:.1f}m "
+                    f"eta_epoch={eta / 60:.1f}m"
                 )
 
         avg_train_loss = epoch_loss / max(len(train_loader), 1)

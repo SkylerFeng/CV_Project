@@ -1,0 +1,39 @@
+paths:
+  basic_dir: /home/fc/Coding/CV/part3/results/report_val000_basicvsrpp_finetuned/frames
+  basic_panel_index: 0
+  basic_panel_count: 1
+  lr_panel_index: 0
+  lr_dir: /home/fc/Coding/CV/data/val/val_sharp_bicubic/X4/000
+
+  generative_dir: /home/fc/Coding/CV/part3/results/report_val000_realesrgan_finetuned
+  generative_suffix: ""
+
+  output_dir: /home/fc/Coding/CV/part3/results/adaptive_hybrid_val000_finetuned_report
+
+adaptive:
+  mode: real
+  anime_threshold: 0.56
+
+  real_max_alpha: 0.36
+  anime_max_alpha: 0.45
+  min_alpha: 0.00
+
+  texture_gain: 1.75
+  line_gain: 0.25
+  flat_gain: 0.08
+
+  edge_protect_strength: 0.55
+  temporal_protect_strength: 0.45
+  disagreement_protect_strength: 0.55
+  structure_protect_strength: 0.55
+  hallucination_protect_strength: 0.55
+  flicker_protect_strength: 0.65
+
+  mask_blur_radius: 4.0
+  gamma: 0.85
+
+output:
+  save_grids: true
+  save_maps: true
+  export_video: true
+  fps: 30

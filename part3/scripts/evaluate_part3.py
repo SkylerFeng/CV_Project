@@ -105,7 +105,7 @@ def write_markdown(path: str, summaries):
 
 def main():
     parser = argparse.ArgumentParser(description="Evaluate Part 3 PSNR/SSIM.")
-    parser.add_argument("--config", type=str, required=True, help="Path to eval_part3.yaml")
+    parser.add_argument("--config", type=str, required=True, help="Path to a Part 3 evaluation yaml.")
     args = parser.parse_args()
 
     cfg = load_config(args.config)
@@ -144,4 +144,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

@@ -109,8 +109,108 @@ class AdaptiveMaskConfig:
     edge_protect_strength: float = 0.75
     temporal_protect_strength: float = 0.60
     disagreement_protect_strength: float = 0.85
+    structure_protect_strength: float = 1.00
+    hallucination_protect_strength: float = 0.90
+    flicker_protect_strength: float = 0.80
     blur_radius: float = 4.0
     gamma: float = 1.15
+
+
+def _laplacian_strength(image: Image.Image) -> np.ndarray:
+    gray = _gray_float(image)
+    lap = np.zeros_like(gray)
+    lap[1:-1, 1:-1] = np.abs(
+        4.0 * gray[1:-1, 1:-1]
+        - gray[:-2, 1:-1]
+        - gray[2:, 1:-1]
+        - gray[1:-1, :-2]
+        - gray[1:-1, 2:]
+    )
+    return _normalize(lap)
+
+
+def text_structure_proxy(image: Image.Image) -> np.ndarray:
+    edges = gradient_strength(image)
+    flat = flat_color_score(image, radius=7)
+    dense_edges = _box_mean((edges > 0.35).astype(np.float32), radius=2)
+    # Text usually appears as dense high-contrast strokes over locally simple regions.
+    return _normalize(edges * dense_edges * np.sqrt(np.clip(flat, 0.0, 1.0)))
+
+
+def face_structure_proxy(image: Image.Image) -> np.ndarray:
+    rgb = _rgb_float(image)
+    r, g, b = rgb[..., 0], rgb[..., 1], rgb[..., 2]
+    maxc = np.maximum(np.maximum(r, g), b)
+    minc = np.minimum(np.minimum(r, g), b)
+
+    skin = (
+        (r > 0.30)
+        & (g > 0.18)
+        & (b > 0.12)
+        & ((maxc - minc) > 0.06)
+        & (r > g * 1.03)
+        & (r > b * 1.08)
+    ).astype(np.float32)
+    skin = _box_mean(skin, radius=5)
+    smooth = flat_color_score(image, radius=5)
+    edges = gradient_strength(image)
+    # This is a lightweight face/skin protection proxy, not a detector.
+    return _normalize(skin * (0.65 * smooth + 0.35 * edges))
+
+
+def structure_protection_map(image: Image.Image) -> np.ndarray:
+    edges = gradient_strength(image)
+    text = text_structure_proxy(image)
+    face = face_structure_proxy(image)
+    strong_edges = np.power(np.clip(edges, 0.0, 1.0), 0.75)
+    return np.clip(np.maximum.reduce([strong_edges, text, face]), 0.0, 1.0)
+
+
+def hallucination_risk_map(basic: Image.Image, generative: Image.Image) -> np.ndarray:
+    generative = generative.resize(basic.size, Image.BICUBIC)
+    basic_rgb = _rgb_float(basic)
+    gen_rgb = _rgb_float(generative)
+    disagreement = branch_disagreement(basic, generative)
+
+    basic_hf = _laplacian_strength(basic)
+    gen_hf = _laplacian_strength(generative)
+    hf_disagreement = _normalize(np.abs(gen_hf - basic_hf))
+
+    basic_gray = basic_rgb.mean(axis=2, keepdims=True)
+    gen_gray = gen_rgb.mean(axis=2, keepdims=True)
+    chroma_shift = _normalize(np.mean(np.abs((gen_rgb - gen_gray) - (basic_rgb - basic_gray)), axis=2))
+
+    return _normalize(0.55 * disagreement + 0.30 * hf_disagreement + 0.15 * chroma_shift)
+
+
+def temporal_raw_change(
+    current: Image.Image,
+    previous: Optional[Image.Image],
+    next_image: Optional[Image.Image],
+) -> np.ndarray:
+    cur = _gray_float(current)
+    diffs = []
+    if previous is not None:
+        diffs.append(np.abs(cur - _gray_float(previous.resize(current.size, Image.BICUBIC))))
+    if next_image is not None:
+        diffs.append(np.abs(cur - _gray_float(next_image.resize(current.size, Image.BICUBIC))))
+    if not diffs:
+        return np.zeros_like(cur)
+    return np.mean(diffs, axis=0)
+
+
+def flicker_risk_map(
+    basic: Image.Image,
+    generative: Image.Image,
+    previous_basic: Optional[Image.Image],
+    next_basic: Optional[Image.Image],
+    previous_generative: Optional[Image.Image],
+    next_generative: Optional[Image.Image],
+) -> np.ndarray:
+    basic_change = temporal_raw_change(basic, previous_basic, next_basic)
+    gen_change = temporal_raw_change(generative, previous_generative, next_generative)
+    excess_gen_change = np.maximum(gen_change - basic_change, 0.0)
+    return _normalize(excess_gen_change)
 
 
 def resolve_content_weight(mode: str, anime_score: float, threshold: float) -> Tuple[str, float]:
@@ -128,6 +228,8 @@ def build_adaptive_alpha(
     previous_basic: Optional[Image.Image],
     next_basic: Optional[Image.Image],
     cfg: AdaptiveMaskConfig,
+    previous_generative: Optional[Image.Image] = None,
+    next_generative: Optional[Image.Image] = None,
 ) -> Tuple[Image.Image, Dict[str, Image.Image], Dict[str, float]]:
     generative = generative.resize(basic.size, Image.BICUBIC)
     anime_score = estimate_anime_score(basic)
@@ -138,9 +240,22 @@ def build_adaptive_alpha(
     flat = flat_color_score(basic)
     temporal = temporal_change_strength(basic, previous_basic, next_basic)
     disagreement = branch_disagreement(basic, generative)
+    structure_protect = structure_protection_map(basic)
+    hallucination_risk = hallucination_risk_map(basic, generative)
+    flicker_risk = flicker_risk_map(
+        basic=basic,
+        generative=generative,
+        previous_basic=previous_basic,
+        next_basic=next_basic,
+        previous_generative=previous_generative,
+        next_generative=next_generative,
+    )
 
     line_candidate = edges * flat
-    texture_candidate = texture * (1.0 - np.clip(edges * cfg.edge_protect_strength, 0.0, 1.0))
+    uncertain_texture = texture * (1.0 - np.clip(structure_protect, 0.0, 1.0))
+    texture_candidate = uncertain_texture * (
+        1.0 - np.clip(edges * cfg.edge_protect_strength, 0.0, 1.0)
+    )
     flat_candidate = flat * (1.0 - texture)
 
     real_prior = cfg.texture_gain * texture_candidate
@@ -153,6 +268,9 @@ def build_adaptive_alpha(
 
     alpha *= 1.0 - np.clip(cfg.temporal_protect_strength * temporal, 0.0, 1.0)
     alpha *= 1.0 - np.clip(cfg.disagreement_protect_strength * disagreement, 0.0, 1.0)
+    alpha *= 1.0 - np.clip(cfg.structure_protect_strength * structure_protect, 0.0, 1.0)
+    alpha *= 1.0 - np.clip(cfg.hallucination_protect_strength * hallucination_risk, 0.0, 1.0)
+    alpha *= 1.0 - np.clip(cfg.flicker_protect_strength * flicker_risk, 0.0, 1.0)
 
     max_alpha = (1.0 - anime_weight) * cfg.real_max_alpha + anime_weight * cfg.anime_max_alpha
     alpha = np.clip(alpha, cfg.min_alpha, max_alpha)
@@ -169,12 +287,20 @@ def build_adaptive_alpha(
         "flat": Image.fromarray((flat * 255.0).round().astype(np.uint8), mode="L"),
         "temporal": Image.fromarray((temporal * 255.0).round().astype(np.uint8), mode="L"),
         "disagreement": Image.fromarray((disagreement * 255.0).round().astype(np.uint8), mode="L"),
+        "structure_protect": Image.fromarray((structure_protect * 255.0).round().astype(np.uint8), mode="L"),
+        "uncertain_texture": Image.fromarray((uncertain_texture * 255.0).round().astype(np.uint8), mode="L"),
+        "hallucination_risk": Image.fromarray((hallucination_risk * 255.0).round().astype(np.uint8), mode="L"),
+        "flicker_risk": Image.fromarray((flicker_risk * 255.0).round().astype(np.uint8), mode="L"),
     }
     stats = {
         "anime_score": anime_score,
         "anime_weight": anime_weight,
         "max_alpha": float(max_alpha),
         "mean_alpha": float(np.asarray(mask).astype(np.float32).mean() / 255.0),
+        "mean_structure_protect": float(structure_protect.mean()),
+        "mean_uncertain_texture": float(uncertain_texture.mean()),
+        "mean_hallucination_risk": float(hallucination_risk.mean()),
+        "mean_flicker_risk": float(flicker_risk.mean()),
         "content_label": content_label,
     }
     return mask, maps, stats

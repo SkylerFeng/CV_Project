@@ -1,35 +1,73 @@
+# Python / environments
 .venv/
 venv/
+env/
 mmagic_env/
 part3_env/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.ipynb_checkpoints/
 
+# OS / archives
+.DS_Store
+Thumbs.db
+__MACOSX/
+*.zip
+*.tar
+*.tar.gz
+*.tgz
+*.rar
+
+# Datasets and extracted dataset copies
 data/
+REDS-sample/
+vimeo-RL/
+
+# Training / inference outputs
 outputs/
 runs/
 logs/
-
 results/
 experiments/
+work_dirs/
+tb_logger/
+wandb/
+part1/outputs/
 part2_1/results/
+part2_1/mmagic/work_dirs/
 part2_2/results/
 part2_2/experiments/
 part3/results/
+part2_extra_outputs/
+part3_extra_outputs/
+part3/report_assets/
 
-__pycache__/
-*.pyc
-.ipynb_checkpoints/
-
+# Model weights and checkpoints.
+# Keep the small official/project checkpoints that are already tracked, but
+# ignore newly generated training checkpoints by default.
 *.pth
 *.pt
 *.ckpt
-
+*.safetensors
+!part1/checkpoints/
+!part1/checkpoints/srcnn_x4_epoch20.pth
 !part2_1/checkpoints/
-!part2_1/checkpoints/**
+!part2_1/checkpoints/basicvsr_plusplus_c64n7_8x1_600k_reds4_20210217-db622b2f.pth
+!part2_1/checkpoints/spynet_20210409-c6c1bd09.pth
 !part2_2/models/
-!part2_2/models/**
+!part2_2/models/RealESRGAN_x4plus.pth
 
+# Generated videos
 *.mp4
 *.avi
-*.zip
+*.mov
+*.mkv
 
-.DS_Store
+# Large intermediate report images. Curated report figures remain trackable.
+figures/*unscaled*.png
+figures/*native_panels*.png
+figures/*contact_sheet*.png

@@ -1,0 +1,58 @@
+sequences: ["000", "001", "002", "003", "004", "005", "006"]
+
+inputs:
+  lr_root: /home/fc/Coding/CV/data/val/val_sharp_bicubic/X4
+  gt_root: /home/fc/Coding/CV/data/val/val_sharp
+  generative_template: /home/fc/Coding/CV/part2_2/results/val{seq}_official_x4plus_original
+  basic_compare_template: /home/fc/Coding/CV/part2_1/results/basicvsrpp_compare_{seq}/images
+  basic_frames_template: /home/fc/Coding/CV/part2_1/results/basicvsrpp_val{seq}_x4/frames
+  compare_sequences: ["000", "001", "002", "003"]
+
+variants:
+  conservative:
+    result_root: /home/fc/Coding/CV/part3/results/adaptive_hybrid_val000_006_official_conservative_backup
+    metrics_root: /home/fc/Coding/CV/part3/results/metrics_adaptive_hybrid_val000_006_official_conservative_backup
+    adaptive:
+      mode: anime
+      anime_threshold: 0.50
+      real_max_alpha: 0.18
+      anime_max_alpha: 0.46
+      min_alpha: 0.00
+      texture_gain: 0.90
+      line_gain: 0.78
+      flat_gain: 0.30
+      edge_protect_strength: 0.85
+      temporal_protect_strength: 0.70
+      disagreement_protect_strength: 1.05
+      structure_protect_strength: 0.80
+      hallucination_protect_strength: 0.85
+      flicker_protect_strength: 0.85
+      mask_blur_radius: 4.0
+      gamma: 1.30
+
+  anime_stronger:
+    result_root: /home/fc/Coding/CV/part3/results/adaptive_hybrid_val000_006_official_anime_stronger
+    metrics_root: /home/fc/Coding/CV/part3/results/metrics_adaptive_hybrid_val000_006_official_anime_stronger
+    adaptive:
+      mode: anime
+      anime_threshold: 0.50
+      real_max_alpha: 0.30
+      anime_max_alpha: 0.66
+      min_alpha: 0.00
+      texture_gain: 1.25
+      line_gain: 1.10
+      flat_gain: 0.42
+      edge_protect_strength: 0.35
+      temporal_protect_strength: 0.50
+      disagreement_protect_strength: 0.55
+      structure_protect_strength: 0.35
+      hallucination_protect_strength: 0.45
+      flicker_protect_strength: 0.60
+      mask_blur_radius: 3.0
+      gamma: 1.00
+
+output:
+  save_grids: false
+  save_maps: true
+  export_video: true
+  fps: 30

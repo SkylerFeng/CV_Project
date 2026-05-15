@@ -30,7 +30,15 @@ def make_adaptive_grid(
         ("Adaptive alpha", _fit(mask.convert("RGB"), size)),
         ("Hybrid", _fit(fused, size)),
     ]
-    for name in ["texture", "edges", "temporal", "disagreement"]:
+    for name in [
+        "texture",
+        "uncertain_texture",
+        "structure_protect",
+        "temporal",
+        "flicker_risk",
+        "hallucination_risk",
+        "disagreement",
+    ]:
         if name in maps:
             panels.append((name, _fit(maps[name].convert("RGB"), size)))
 

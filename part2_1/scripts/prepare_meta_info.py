@@ -1,4 +1,4 @@
-import os
+import argparse
 from pathlib import Path
 
 
@@ -34,14 +34,15 @@ def build_meta_info(video_root: str, out_file: str):
 
 
 def main():
-    train_root = '/home/fc/Coding/CV/data/train/train_sharp'
-    val_root = '/home/fc/Coding/CV/data/val/val_sharp'
+    parser = argparse.ArgumentParser(description='Build BasicVSR++ meta-info files from frame folders.')
+    parser.add_argument('--train-root', default='data/train/train_sharp', help='Training HR sequence root.')
+    parser.add_argument('--val-root', default='data/val/val_sharp', help='Validation HR sequence root.')
+    parser.add_argument('--train-out', default='part2_1/data/meta_info_train.txt', help='Output train meta-info file.')
+    parser.add_argument('--val-out', default='part2_1/data/meta_info_val.txt', help='Output validation meta-info file.')
+    args = parser.parse_args()
 
-    train_out = '/home/fc/Coding/CV/part2_1/data/meta_info_train.txt'
-    val_out = '/home/fc/Coding/CV/part2_1/data/meta_info_val.txt'
-
-    build_meta_info(train_root, train_out)
-    build_meta_info(val_root, val_out)
+    build_meta_info(args.train_root, args.train_out)
+    build_meta_info(args.val_root, args.val_out)
 
 
 if __name__ == '__main__':

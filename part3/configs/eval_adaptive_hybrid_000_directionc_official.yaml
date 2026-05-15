@@ -1,0 +1,19 @@
+paths:
+  gt_dir: /home/fc/Coding/CV/data/val/val_sharp/000
+  output_dir: /home/fc/Coding/CV/part3/results/metrics_adaptive_hybrid_000_directionc_official
+
+methods:
+  BasicVSR++:
+    dir: /home/fc/Coding/CV/part3/results/adaptive_hybrid_000_directionc_official/basic_frames
+    suffix: ""
+
+  Official-Real-ESRGAN:
+    dir: /home/fc/Coding/CV/part3/results/adaptive_hybrid_000_directionc_official/generative_frames
+    suffix: ""
+
+  DirectionC-Hybrid-Official:
+    dir: /home/fc/Coding/CV/part3/results/adaptive_hybrid_000_directionc_official/frames
+    suffix: ""
+
+metrics:
+  crop_border: 0

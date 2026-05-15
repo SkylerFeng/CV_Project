@@ -49,6 +49,9 @@ def adaptive_config(raw: dict) -> AdaptiveMaskConfig:
         edge_protect_strength=float(raw.get("edge_protect_strength", 0.75)),
         temporal_protect_strength=float(raw.get("temporal_protect_strength", 0.60)),
         disagreement_protect_strength=float(raw.get("disagreement_protect_strength", 0.85)),
+        structure_protect_strength=float(raw.get("structure_protect_strength", 1.00)),
+        hallucination_protect_strength=float(raw.get("hallucination_protect_strength", 0.90)),
+        flicker_protect_strength=float(raw.get("flicker_protect_strength", 0.80)),
         blur_radius=float(raw.get("mask_blur_radius", 4.0)),
         gamma=float(raw.get("gamma", 1.15)),
     )
@@ -66,6 +69,10 @@ def write_stats(path: str, rows):
                 "anime_weight",
                 "max_alpha",
                 "mean_alpha",
+                "mean_structure_protect",
+                "mean_uncertain_texture",
+                "mean_hallucination_risk",
+                "mean_flicker_risk",
             ],
         )
         writer.writeheader()
@@ -135,10 +142,14 @@ def main():
 
         previous_basic = None
         next_basic = None
+        previous_generative = None
+        next_generative = None
         if prev_item is not None:
             previous_basic = basic_panel(prev_item[1], panel_index=basic_panel_index, panel_count=panel_count)
+            previous_generative = resize_like(load_rgb(prev_item[2]), basic)
         if next_item is not None:
             next_basic = basic_panel(next_item[1], panel_index=basic_panel_index, panel_count=panel_count)
+            next_generative = resize_like(load_rgb(next_item[2]), basic)
 
         mask, maps, stats = build_adaptive_alpha(
             basic=basic,
@@ -146,6 +157,8 @@ def main():
             previous_basic=previous_basic,
             next_basic=next_basic,
             cfg=mask_cfg,
+            previous_generative=previous_generative,
+            next_generative=next_generative,
         )
         fused = blend_with_mask(basic, generative, mask)
 

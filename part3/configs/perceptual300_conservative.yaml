@@ -1,0 +1,32 @@
+sequences: ["000", "001", "002"]
+
+inputs:
+  lr_root: /home/fc/Coding/CV/data/val/val_sharp_bicubic/X4
+  gt_root: /home/fc/Coding/CV/data/val/val_sharp
+  basic_template: /home/fc/Coding/CV/part3/results/perceptual500/basicvsrpp/{seq}/frames
+  generative_template: /home/fc/Coding/CV/part3/results/perceptual500/realesrgan/{seq}
+
+output:
+  result_root: /home/fc/Coding/CV/part3/results/perceptual300/hybrid_conservative
+  save_grids: false
+  save_maps: true
+  export_video: true
+  fps: 30
+
+adaptive:
+  mode: real
+  anime_threshold: 0.56
+  real_max_alpha: 0.36
+  anime_max_alpha: 0.45
+  min_alpha: 0.00
+  texture_gain: 1.75
+  line_gain: 0.25
+  flat_gain: 0.08
+  edge_protect_strength: 0.55
+  temporal_protect_strength: 0.45
+  disagreement_protect_strength: 0.55
+  structure_protect_strength: 0.55
+  hallucination_protect_strength: 0.55
+  flicker_protect_strength: 0.65
+  mask_blur_radius: 4.0
+  gamma: 0.85

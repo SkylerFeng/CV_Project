@@ -1,0 +1,42 @@
+paths:
+  train_lr: /home/fc/Coding/CV/data/train/train_sharp_bicubic/X4
+  train_hr: /home/fc/Coding/CV/data/train/train_sharp
+
+  val_lr: /home/fc/Coding/CV/data/val/val_sharp_bicubic/X4
+  val_hr: /home/fc/Coding/CV/data/val/val_sharp
+
+  pretrain: /home/fc/Coding/CV/part2_2/models/RealESRGAN_x4plus.pth
+  save_dir: /home/fc/Coding/CV/part2_2/experiments/realesrgan_x4plus_official_conservative_4epoch
+
+train:
+  scale: 4
+  patch_size: 64
+  batch_size: 2
+  num_workers: 4
+
+  epochs: 4
+  lr: 1e-5
+  weight_decay: 0.0
+
+  loss_type: charbonnier
+  loss_weight: 1.0
+  perceptual_weight: 0.002
+  edge_weight: 0.015
+  laplacian_weight: 0.010
+  color_weight: 0.020
+  init_weight_reg: 0.0001
+
+  max_train_samples: 2400
+  max_val_samples: 300
+
+  amp: true
+  grad_clip: 1.0
+  log_interval: 10
+  save_freq: 1
+  val_freq: 1
+
+  device: cuda
+  seed: 42
+
+resume:
+  path: ""

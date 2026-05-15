@@ -1,0 +1,32 @@
+paths:
+  basic_dir: /home/fc/Coding/CV/part2_1/results/video3_basicvsrpp_x4_new/frames
+  basic_panel_index: 0
+  basic_panel_count: 1
+  lr_dir: /home/fc/Coding/CV/part2_1/results/video3_basicvsrpp_x4_new/input_frames
+  lr_panel_index: 0
+
+  output_dir: /home/fc/Coding/CV/part3/results/adaptive_hybrid_video3_official_anime_stronger
+
+adaptive:
+  mode: anime
+  anime_threshold: 0.50
+  real_max_alpha: 0.30
+  anime_max_alpha: 0.66
+  min_alpha: 0.00
+
+  texture_gain: 1.25
+  line_gain: 1.10
+  flat_gain: 0.42
+
+  edge_protect_strength: 0.35
+  temporal_protect_strength: 0.50
+  disagreement_protect_strength: 0.55
+  structure_protect_strength: 0.35
+  hallucination_protect_strength: 0.45
+  flicker_protect_strength: 0.60
+
+  mask_blur_radius: 3.0
+  gamma: 1.00
+
+output:
+  fps: 23.98

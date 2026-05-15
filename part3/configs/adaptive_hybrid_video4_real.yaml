@@ -1,0 +1,38 @@
+paths:
+  basic_dir: /home/fc/Coding/CV/part2_1/results/video4_basicvsrpp_x4_4k/frames
+  basic_panel_index: 0
+  basic_panel_count: 1
+  lr_dir: /home/fc/Coding/CV/part2_1/results/video4_basicvsrpp_x4_4k/input_frames
+  lr_panel_index: 0
+
+  generative_dir: /home/fc/Coding/CV/part2_2/results/video4_realesrgan_x4plus_4k/frames
+  generative_suffix: ""
+
+  output_dir: /home/fc/Coding/CV/part3/results/adaptive_hybrid_video4_real_4k
+
+adaptive:
+  # Real video: trust BasicVSR++ for structure/temporal stability and use
+  # Real-ESRGAN only as a conservative local detail branch.
+  mode: real
+  anime_threshold: 0.50
+
+  real_max_alpha: 0.24
+  anime_max_alpha: 0.46
+  min_alpha: 0.00
+
+  texture_gain: 0.82
+  line_gain: 0.40
+  flat_gain: 0.10
+
+  edge_protect_strength: 1.05
+  temporal_protect_strength: 0.75
+  disagreement_protect_strength: 1.10
+
+  mask_blur_radius: 5.0
+  gamma: 1.35
+
+output:
+  save_grids: false
+  save_maps: false
+  export_video: true
+  fps: 29

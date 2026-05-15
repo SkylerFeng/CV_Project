@@ -169,8 +169,46 @@ def save_sr_frame(sr_frame: torch.Tensor, out_dir: str, filename: str):
     Image.fromarray(arr).save(os.path.join(out_dir, filename))
 
 
+def start_video_writer(out_path: str, width: int, height: int, fps: float):
+    ensure_dir(os.path.dirname(out_path))
+    cmd = [
+        "ffmpeg",
+        "-y",
+        "-f",
+        "rawvideo",
+        "-pix_fmt",
+        "rgb24",
+        "-s",
+        f"{width}x{height}",
+        "-r",
+        str(fps),
+        "-i",
+        "-",
+        "-an",
+        "-vcodec",
+        "libx264",
+        "-pix_fmt",
+        "yuv420p",
+        out_path,
+    ]
+    return subprocess.Popen(
+        cmd,
+        stdin=subprocess.PIPE,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+
+
+def write_sr_frame_to_video(sr_frame: torch.Tensor, writer):
+    arr = tensor_to_uint8_image(sr_frame)
+    writer.stdin.write(arr.tobytes())
+
+
 def infer_full_sequence(model, lr_seq: torch.Tensor, device: torch.device):
+    dtype = next(model.parameters()).dtype
     lr_input = lr_seq.unsqueeze(0).to(device)
+    if dtype != lr_input.dtype:
+        lr_input = lr_input.to(dtype=dtype)
     _, t, c, h, w = lr_input.shape
     lr_input = lr_input.view(-1, c, h, w)
     lr_input, pad_h, pad_w = pad_to_multiple_of_4(lr_input)
@@ -237,6 +275,66 @@ def infer_and_save_chunked_sequence(
 
     if saved != total_frames:
         raise RuntimeError(f"Streaming inference saved {saved} frames, expected {total_frames}.")
+
+
+def infer_and_write_chunked_sequence(
+    model,
+    frame_paths,
+    out_video_path: str,
+    fps: float,
+    device: torch.device,
+    chunk_size: int,
+    overlap: int,
+):
+    total_frames = len(frame_paths)
+    if total_frames == 0:
+        raise ValueError("No frames to infer.")
+
+    chunk_size = max(1, int(chunk_size))
+    overlap = max(0, min(int(overlap), chunk_size // 2 - 1))
+    step = chunk_size - 2 * overlap
+    if step <= 0:
+        raise ValueError("chunk_size must be larger than 2 * chunk_overlap")
+
+    first = Image.open(frame_paths[0]).convert("RGB")
+    width, height = first.size[0] * 4, first.size[1] * 4
+    first.close()
+    writer = start_video_writer(out_video_path, width=width, height=height, fps=fps)
+
+    print(
+        f"Running BasicVSR++ in streaming chunks to video: "
+        f"chunk_size={chunk_size}, overlap={overlap}, step={step}"
+    )
+
+    written = 0
+    try:
+        for start in tqdm(range(0, total_frames, step), desc="Infer/write chunks"):
+            end = min(start + chunk_size, total_frames)
+            chunk = load_frame_paths(frame_paths[start:end])
+            chunk_out = infer_full_sequence(model, chunk, device)
+
+            keep_start = 0 if start == 0 else overlap
+            keep_end = chunk_out.shape[0] if end == total_frames else chunk_out.shape[0] - overlap
+
+            for local_idx in range(keep_start, keep_end):
+                write_sr_frame_to_video(chunk_out[local_idx], writer)
+                written += 1
+
+            del chunk, chunk_out
+            if device.type == "cuda":
+                torch.cuda.empty_cache()
+
+            if end == total_frames:
+                break
+    finally:
+        if writer.stdin:
+            writer.stdin.close()
+        ret = writer.wait()
+        if ret != 0:
+            raise RuntimeError(f"ffmpeg video writer failed with exit code {ret}.")
+
+    if written != total_frames:
+        raise RuntimeError(f"Streaming inference wrote {written} frames, expected {total_frames}.")
 
 
 def infer_chunked_sequence(
@@ -356,7 +454,9 @@ def parse_args():
         help="Neighbor frames shared between chunks to reduce boundary artifacts.",
     )
     parser.add_argument("--device", type=str, default="cuda")
+    parser.add_argument("--half", action="store_true", help="Use FP16 inference on CUDA to reduce memory usage.")
     parser.add_argument("--keep-input-frames", action="store_true", help="Keep extracted input frames for video input")
+    parser.add_argument("--video-only", action="store_true", help="Write SR video directly without saving SR PNG frames.")
     parser.add_argument(
         "--no-stream-save",
         action="store_true",
@@ -402,6 +502,12 @@ def main():
     )
     load_basicvsrpp_generator_checkpoint(model, args.ckpt)
     model = model.to(device).eval()
+    if args.half:
+        if device.type != "cuda":
+            print("[WARN] --half is only supported on CUDA. Keeping FP32.")
+        else:
+            model = model.half()
+            print("[INFO] Using FP16 inference.")
 
     print("Running BasicVSR++...")
     sr_frames_dir = os.path.join(args.output, "frames")
@@ -412,7 +518,18 @@ def main():
         frame_paths = frame_paths[: args.max_frames]
     filenames = [os.path.basename(path) for path in frame_paths]
 
-    if args.no_stream_save:
+    sr_video_path = os.path.join(videos_dir, "sr.mp4")
+    if args.video_only:
+        infer_and_write_chunked_sequence(
+            model,
+            frame_paths,
+            sr_video_path,
+            fps=fps,
+            device=device,
+            chunk_size=int(args.chunk_size),
+            overlap=int(args.chunk_overlap),
+        )
+    elif args.no_stream_save:
         lr_seq = load_frame_paths(frame_paths)
         sr_seq = infer_chunked_sequence(
             model,
@@ -433,13 +550,14 @@ def main():
             overlap=int(args.chunk_overlap),
         )
 
-    frames_to_video(sr_frames_dir, os.path.join(videos_dir, "sr.mp4"), fps=fps)
+        frames_to_video(sr_frames_dir, sr_video_path, fps=fps)
 
     if source_video and not args.keep_input_frames:
         shutil.rmtree(input_frames_dir, ignore_errors=True)
 
-    print(f"Saved SR frames to: {sr_frames_dir}")
-    print(f"Saved SR video to: {os.path.join(videos_dir, 'sr.mp4')}")
+    if not args.video_only:
+        print(f"Saved SR frames to: {sr_frames_dir}")
+    print(f"Saved SR video to: {sr_video_path}")
 
 
 if __name__ == "__main__":

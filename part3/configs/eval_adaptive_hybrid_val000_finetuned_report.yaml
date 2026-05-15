@@ -1,0 +1,19 @@
+paths:
+  gt_dir: /home/fc/Coding/CV/data/val/val_sharp/000
+  output_dir: /home/fc/Coding/CV/part3/results/metrics_adaptive_hybrid_val000_finetuned_report
+
+methods:
+  Fine-tuned BasicVSR++:
+    dir: /home/fc/Coding/CV/part3/results/adaptive_hybrid_val000_finetuned_report/basic_frames
+    suffix: ""
+
+  Fine-tuned Real-ESRGAN:
+    dir: /home/fc/Coding/CV/part3/results/adaptive_hybrid_val000_finetuned_report/generative_frames
+    suffix: ""
+
+  Direction C Hybrid:
+    dir: /home/fc/Coding/CV/part3/results/adaptive_hybrid_val000_finetuned_report/frames
+    suffix: ""
+
+metrics:
+  crop_border: 0
